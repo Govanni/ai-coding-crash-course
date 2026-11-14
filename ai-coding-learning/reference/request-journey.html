@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference · The request journey in Cadence</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<p class="kicker">Reference · Cadence</p>
+<h1>The request journey</h1>
+<p class="subtitle">Where each kind of code lives, and where it runs.</p>
+
+<ol class="journey">
+  <li class="client"><span class="tag client">browser</span><b>Request</b>URL e.g. <code>/courses</code></li>
+  <li class="server"><span class="tag server">server</span><b>Route + loader</b><code>app/routes/*.tsx</code></li>
+  <li class="server"><span class="tag server">server</span><b>Service</b><code>app/services/*.ts</code></li>
+  <li class="db"><span class="tag db">db</span><b>Drizzle → SQLite</b><code>data.db</code></li>
+  <li class="client"><span class="tag client">browser</span><b>Component</b>renders <code>loaderData</code></li>
+</ol>
+
+<h2>Where to look</h2>
+<table>
+  <tr><th>I want to…</th><th>Look in</th><th>Runs on</th></tr>
+  <tr><td>See which file handles a URL</td><td><code>app/routes.ts</code></td><td><span class="tag server">server</span></td></tr>
+  <tr><td>See what data a page loads</td><td><code>export async function loader</code> in the route file</td><td><span class="tag server">server</span></td></tr>
+  <tr><td>See what a page looks like</td><td><code>export default function …</code> in the route file</td><td><span class="tag server">server</span> + <span class="tag client">browser</span></td></tr>
+  <tr><td>See how data is read/written</td><td><code>app/services/*Service.ts</code></td><td><span class="tag server">server</span></td></tr>
+  <tr><td>See what tables and columns exist</td><td><code>app/db/schema.ts</code></td><td><span class="tag db">db</span> definition</td></tr>
+  <tr><td>See the actual SQL that built the tables</td><td><code>drizzle/*.sql</code> (migrations)</td><td><span class="tag db">db</span></td></tr>
+  <tr><td>Reusable UI pieces</td><td><code>app/components/</code></td><td><span class="tag server">server</span> + <span class="tag client">browser</span></td></tr>
+</table>
+
+<h2>Anatomy of a route file</h2>
+<pre><code><span class="tag server">server only</span>
+export async function loader({ request, url, params }) {
+  // read the URL, call services, return plain data
+  return { courses };
+}
+
+<span class="tag server">server</span> + <span class="tag client">browser</span>
+export default function Page({ loaderData }) {
+  const { courses } = loaderData;   // ← same shape the loader returned
+  return &lt;div&gt;{courses.map(c =&gt; &lt;p&gt;{c.title}&lt;/p&gt;)}&lt;/div&gt;;
+}</code></pre>
+
+<h2>Rules of thumb</h2>
+<ul>
+  <li>Components <b>never</b> touch the database. They only see <code>loaderData</code>.</li>
+  <li><code>console.log</code> in a loader shows in the <b>terminal</b>. In a component it shows in both places on a full reload, and only in the browser on in-app navigation.</li>
+  <li>Setup for a fresh clone: <code>npm run db:migrate</code> → <code>npm run db:seed</code> → <code>npm run dev</code>.</li>
+</ul>
+
+<p class="legend">Sources: <a href="https://reactrouter.com/start/framework/data-loading">React Router: Data Loading</a> · <a href="https://react.dev/learn">react.dev Quick Start</a> · <a href="https://orm.drizzle.team/docs/overview">Drizzle overview</a> · <a href="https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Server-side/First_steps/Client-Server_overview">MDN Client-Server overview</a></p>
+<p class="legend">Taught in: <a href="../lessons/0001-one-page-three-places.html">0001 · One page, three places</a></p>
+
+</body>
+</html>

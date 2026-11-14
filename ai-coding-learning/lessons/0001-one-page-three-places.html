@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>0001 · One page, three places: Cadence's course list</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<p class="kicker">Lesson 0001 · Cadence fundamentals</p>
+<h1>One page, three places</h1>
+<p class="subtitle">Follow <code>/courses</code> from your browser to the database and back, then prove it with two <code>console.log</code>s.</p>
+
+<p class="meta">≈ 20 minutes · You'll need a terminal open in the course repo (<code>..</code> from this folder) · Reference: <a href="../reference/request-journey.html">The request journey (cheat sheet)</a></p>
+
+<h2>Why this first</h2>
+<p>When Claude Code edits Cadence, every change lands in one of three places: the <span class="tag client">browser</span>, the <span class="tag server">server</span> or the <span class="tag db">database</span>. If you can't tell which one, you can't judge whether a change makes sense. This lesson gives you that map, using one real page.</p>
+
+<h2>The three places</h2>
+<p><b>The client</b> is your web browser. It can only show things and react to clicks. <b>The server</b> is a Node.js program running in your terminal (<code>npm run dev</code>). It is the only part allowed to read files and secrets. <b>The database</b> is a file, <code>data.db</code>, that stores tables of rows. Only the server talks to it.</p>
+<p>The browser and server talk to each other over HTTP: <q>When you click a link on a web page, submit a form, or run a search, the browser sends an HTTP Request to the server.</q> The server works out an answer and sends back a response. <a href="https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Server-side/First_steps/Client-Server_overview">(MDN)</a></p>
+
+<h2>The journey of <code>/courses</code></h2>
+
+<ol class="journey">
+  <li class="client"><span class="tag client">browser</span><b>Request</b>GET <code>/courses</code></li>
+  <li class="server"><span class="tag server">server</span><b>Route + loader</b><code>routes/courses.tsx</code></li>
+  <li class="server"><span class="tag server">server</span><b>Service</b><code>courseService.ts</code></li>
+  <li class="db"><span class="tag db">db</span><b>Drizzle → SQLite</b><code>data.db</code></li>
+  <li class="client"><span class="tag client">browser</span><b>Component renders</b><code>loaderData</code></li>
+</ol>
+<p class="legend">Colour = where the code runs. You'll see these same colours in every lesson.</p>
+
+<h3>① → ② Which file handles the URL?</h3>
+<p><code>app/routes.ts</code> is a lookup table from URLs to files:</p>
+<pre class="server"><span class="file">app/routes.ts</span><code>route("courses", "routes/courses.tsx"),</code></pre>
+
+<h3>② The loader: the server half of a route file</h3>
+<p>A route file can export a function called <code>loader</code>. React Router runs it <em>on the server</em> before showing the page. The docs say that the <q><code>loader</code> function is removed from client bundles so you can use server only APIs</q>. <a href="https://reactrouter.com/start/framework/data-loading">(React Router docs)</a></p>
+<pre class="server"><span class="file">app/routes/courses.tsx · line 26</span><code>export async function loader({ request, url }: Route.LoaderArgs) {
+  const search = url.searchParams.get("q");
+  const category = url.searchParams.get("category");
+
+  const courses = <span class="hl">buildCourseQuery(</span>search, category, CourseStatus.Published, "newest", 50, 0);
+  …
+  return { courses: coursesWithLessonCount, categories, search, category, currentUserId };
+}</code></pre>
+
+<h3>③ → ④ The service talks to the database</h3>
+<p>Services in <code>app/services/</code> are plain TypeScript functions that read and write data. They use <a href="https://orm.drizzle.team/docs/overview">Drizzle</a>, a library that lets you write database queries as TypeScript. Drizzle turns this into SQL, the language SQLite understands:</p>
+<pre class="db"><span class="file">app/services/courseService.ts · line 73 (simplified)</span><code>db.select({ id: courses.id, title: courses.title, … })
+  .from(courses)
+  .innerJoin(users, eq(courses.instructorId, users.id))
+  …
+  .all();</code></pre>
+<p>For now, read it as English: <i>"select these columns from the courses table, attach each course's instructor from the users table, and give me all the rows."</i> A later lesson covers tables and joins properly.</p>
+
+<h3>⑤ The component: the part you see</h3>
+<p>The file's <code>default export</code> is a React <b>component</b>. <q>React components are JavaScript functions that return markup.</q> <a href="https://react.dev/learn">(react.dev)</a> That markup is JSX, the HTML-like syntax inside <code>.tsx</code> files. The component never touches the database. Whatever the loader returned arrives as <code>loaderData</code>:</p>
+<pre class="client"><span class="file">app/routes/courses.tsx · line 117</span><code>export default function CourseCatalog({ <span class="hl">loaderData</span> }: Route.ComponentProps) {
+  const { courses, categories, search, category, currentUserId } = loaderData;
+  …
+  {courses.map((course) =&gt; ( … {course.title} … ))}</code></pre>
+
+<div class="sidenote">The <code>return { courses, … }</code> at the end of the loader and the <code>const { courses, … } = loaderData</code> in the component are two ends of the same pipe.</div>
+
+<div class="callout recall">
+<p><b>Recall, don't re-read.</b> Cover the diagram above. On paper, write the five stops for <code>/courses</code> in order, and mark each one <i>browser</i>, <i>server</i> or <i>db</i>. Then check.</p>
+</div>
+
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="q">
+    <p class="prompt">1. In <code>CourseCatalog</code>, where does the list of courses come from?</p>
+    <div class="options">
+      <button class="opt" data-correct>It arrives as the loaderData prop</button>
+      <button class="opt">It queries the SQLite file directly</button>
+      <button class="opt">It reads them from browser localStorage</button>
+    </div>
+    <div class="why">The loader runs on the server, gets the rows through the service and Drizzle, and returns them. React Router hands that return value to the component as <code>loaderData</code>. Components never talk to the database.</div>
+  </div>
+
+  <div class="q">
+    <p class="prompt">2. Which file describes the columns of the <code>courses</code> table?</p>
+    <div class="options">
+      <button class="opt"><code>app/db/index.ts</code></button>
+      <button class="opt"><code>app/routes.ts</code></button>
+      <button class="opt" data-correct><code>app/db/schema.ts</code></button>
+      <button class="opt"><code>drizzle.config.ts</code></button>
+    </div>
+    <div class="why"><code>schema.ts</code> defines every table, e.g. <code>sqliteTable("courses", { id, title, slug, price, … })</code>. <code>index.ts</code> opens the connection to <code>data.db</code>, and <code>routes.ts</code> maps URLs to route files.</div>
+  </div>
+
+  <div class="q">
+    <p class="prompt">3. Why may the loader import database code when the component may not?</p>
+    <div class="options">
+      <button class="opt">Components only ever run on the server</button>
+      <button class="opt" data-correct>Loaders only ever run on the server</button>
+      <button class="opt">SQLite can only be read by components</button>
+    </div>
+    <div class="why">React Router strips the <code>loader</code> out of the code it sends to the browser, so server-only code such as database access is safe there. The component <em>does</em> get sent to the browser, as you'll prove below.</div>
+  </div>
+
+  <div class="q">
+    <p class="prompt">4. Which order matches a visit to <code>/courses</code>?</p>
+    <div class="options">
+      <button class="opt">Browser → SQLite → Drizzle → service → loader → component</button>
+      <button class="opt">Browser → component → SQLite → loader → service → Drizzle</button>
+      <button class="opt" data-correct>Browser → loader → service → Drizzle → SQLite → component</button>
+    </div>
+    <div class="why">The request goes in through the route's loader, down through the service and Drizzle to SQLite, then the data comes back up and the component renders it.</div>
+  </div>
+  <p class="quiz-score"></p>
+</div>
+
+<h2>Do it: prove where code runs</h2>
+<p>Now check the map against the real app. Run every command from the <b>course repo</b>, the folder one level above this workspace.</p>
+
+<ol class="steps">
+  <li><b>Create the database and start the app.</b> Your repo has no <code>data.db</code> yet, so the first two commands build the tables and fill them with sample data.
+<pre><code>cd ..
+npm run db:migrate   # creates data.db and its tables (from drizzle/*.sql)
+npm run db:seed      # inserts sample users, courses, lessons…
+npm run dev          # starts the server → http://localhost:5173</code></pre>
+  Open <a href="http://localhost:5173/courses">localhost:5173/courses</a>. You should see a grid of courses. Every card is a row from <code>data.db</code>.<br>
+  <label class="done"><input type="checkbox" data-step="run"> done</label></li>
+
+  <li><b>Predict first.</b> You're about to add <code>console.log("LOADER ran")</code> inside the loader. Before you do, write down where you think the message will appear: the browser's DevTools console (⌥⌘J in Chrome), the terminal running <code>npm run dev</code>, or both.<br>
+  <label class="done"><input type="checkbox" data-step="predict1"> prediction written</label></li>
+
+  <li><b>Add the log to the loader</b> in <code>app/routes/courses.tsx</code>, as the first line inside <code>loader</code> (line 27):
+<pre class="server"><code>export async function loader({ request, url }: Route.LoaderArgs) {
+  <span class="hl">console.log("LOADER ran");</span></code></pre>
+  Reload the page and check both the terminal and DevTools. Then click to another page and back to <i>Courses</i> using the sidebar, without reloading. Does it log again? Where?<br>
+  <label class="done"><input type="checkbox" data-step="loader"> observed</label></li>
+
+  <li><b>Predict again, then add a log to the component.</b> Put it as the first line inside <code>CourseCatalog</code> (line 118):
+<pre class="client"><code>export default function CourseCatalog({ loaderData }: Route.ComponentProps) {
+  <span class="hl">console.log("COMPONENT rendered");</span></code></pre>
+  Do a <b>full reload</b> (⌘R) and check both places. Then navigate away and back using the sidebar, and check again.<br>
+  <label class="done"><input type="checkbox" data-step="component"> observed</label></li>
+
+  <li><b>Clean up.</b> Undo your edits with <code>git checkout app/routes/courses.tsx</code>.<br>
+  <label class="done"><input type="checkbox" data-step="clean"> clean</label></li>
+</ol>
+
+<details class="reveal">
+<summary>Show what you should have seen (only after doing it)</summary>
+<ul>
+  <li><b>LOADER ran</b> only ever shows in the <b>terminal</b>, on a full reload and on sidebar navigation. On navigation the browser quietly asks the server to run the loader again (the docs call this an <q>automatic <code>fetch</code></q>).</li>
+  <li><b>COMPONENT rendered</b> on a full reload shows in <b>both</b>. The server renders the component once to build the first HTML, then the browser runs it again to make the page interactive. That second run is called <i>hydration</i>. On sidebar navigation it shows <b>only in the browser</b>.</li>
+</ul>
+<p>So there are really three kinds of code: <span class="tag server">server only</span> (loaders, services, db), <span class="tag client">browser only</span> (click handlers and similar), and <b>both</b> (components). That third category is what trips people up, and a later lesson covers it.</p>
+</details>
+
+<div class="callout source">
+<p><b>Primary source:</b> read React Router's <a href="https://reactrouter.com/start/framework/data-loading">Data Loading</a> page (5 minutes). It's short, and you can now read it against real code. As a backup for the browser ↔ server idea, read MDN's <a href="https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Server-side/First_steps/Client-Server_overview">Client-Server overview</a> up to "Static sites".</p>
+</div>
+
+<div class="callout ask">
+<b>Stuck or curious?</b> Ask me, your teacher in Claude Code. For example: <i>"Why did the component log twice?"</i>, <i>"What is <code>url.searchParams</code>?"</i> or <i>"Show me the SQL that Drizzle generates."</i> Also tell me what you saw in steps 3 and 4, because that tells me what to teach next.
+</div>
+
+<nav class="lesson-nav">
+  <span>← Start of course</span>
+  <a href="../reference/request-journey.html">Cheat sheet: the request journey →</a>
+</nav>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>
